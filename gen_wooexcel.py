@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import csv
 import os
+from chardet.universaldetector import UniversalDetector
 
 DEFAULT_INPUT_FILENAME = "data/data.csv"
 DEFAULT_OUTPUT_FILENAME_PREFIX = "wooexcel_"
@@ -80,24 +81,37 @@ def fill_row(is_parent, data, idx, a1v=None, a2v=None):
         'Attribute 3 global': '',
     }
 
+detector = UniversalDetector()
+detector.reset()
+for line in open(input_filename, 'rb'):
+    detector.feed(line)
+    if detector.done:
+        break
+detector.close()
+print(detector.result)
 
-with open(input_filename, 'r', newline='') as input_file:
-    with open(output_filename, 'w', newline='') as output_file:
+input_file_encoding = detector.result['encoding']
+with open(input_filename, 'r', newline='', encoding=input_file_encoding) as input_file:
+    with open(output_filename, 'w', newline='', encoding=input_file_encoding) as output_file:
         reader = csv.DictReader(input_file)
         writer = csv.DictWriter(output_file, fieldnames=fieldnames)
         writer.writeheader()
-        for row in reader:
-            print("Processing: {sku}".format(sku=row['SKU']))
-            is_parent = True
-            parent_sku = row['SKU']
-            idx = 0
-            r = fill_row(is_parent, row, idx)  # fill parent line
-            writer.writerow(r)  # write parent line
+        try:
+            for row in reader:
+                print("Processing: {sku}".format(sku=row['SKU']))
+                is_parent = True
+                parent_sku = row['SKU']
+                idx = 0
+                r = fill_row(is_parent, row, idx)  # fill parent line
+                writer.writerow(r)  # write parent line
 
-            # fill child line
-            is_parent = False
-            for a1v in row['Attribute 1 value(s)'].split(','):
-                for a2v in row['Attribute 2 value(s)'].split(','):
-                    idx += 1
-                    r = fill_row(is_parent, row, idx, a1v=a1v, a2v=a2v)
-                    writer.writerow(r)  # write parent line
+                # fill child line
+                is_parent = False
+                for a1v in row['Attribute 1 value(s)'].split(','):
+                    for a2v in row['Attribute 2 value(s)'].split(','):
+                        idx += 1
+                        r = fill_row(is_parent, row, idx, a1v=a1v, a2v=a2v)
+                        writer.writerow(r)  # write parent line
+        except UnicodeDecodeError as e:
+            print(row['SKU'], e.encoding)
+            raise e
